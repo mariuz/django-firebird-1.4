@@ -1,49 +1,47 @@
 """
-Firebird database backend for Django.
+Firebird SQL database backend for Django.
 
 Requires kinterbasdb: http://www.firebirdsql.org/index.php?op=devel&sub=python
 """
 
-import os
 import datetime
-import time
 try:
     from decimal import Decimal
 except ImportError:
     from django.utils._decimal import Decimal
+from django.utils.encoding import smart_str, smart_unicode
 
 try:
     import kinterbasdb as Database
+    import kinterbasdb.typeconv_datetime_stdlib as typeconv_dt
+    import kinterbasdb.typeconv_fixed_decimal as typeconv_fd
+    import kinterbasdb.typeconv_text_unicode as typeconv_tu
 except ImportError, e:
     from django.core.exceptions import ImproperlyConfigured
     raise ImproperlyConfigured("Error loading kinterbasdb module: %s" % e)
 
-
-
 from django.db.backends import *
-from django.db.backends.firebird import query
-from django.db.backends.firebird.client import DatabaseClient
-from django.db.backends.firebird.creation import DatabaseCreation
-from django.db.backends.firebird.introspection import DatabaseIntrospection
 
-#from django.utils.encoding import smart_str, smart_unicode, force_unicode
+from client import DatabaseClient
+from creation import DatabaseCreation
+from introspection import DatabaseIntrospection
 
+DB_CHARSET_TO_DB_CHARSET_CODE = typeconv_tu.DB_CHAR_SET_NAME_TO_DB_CHAR_SET_ID_MAP
+DB_CHARSET_TO_PYTHON_CHARSET = typeconv_tu.DB_CHAR_SET_NAME_TO_PYTHON_ENCODING_MAP
 
 DatabaseError = Database.DatabaseError
 IntegrityError = Database.IntegrityError
 OperationalError = Database.OperationalError
 
 class DatabaseFeatures(BaseDatabaseFeatures):
-    uses_custom_query_class = True
+    can_return_id_from_insert = True
+    uses_savepoints = False
 
 class DatabaseOperations(BaseDatabaseOperations):
-    """
-    This class encapsulates all backend-specific differences, such as the way
-    a backend performs ordering or calculates the ID of a recently-inserted
-    row.
-    """
+    compiler_module = "django.db.backends.firebird.compiler"
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super(DatabaseOperations, self).__init__(*args, **kwargs)
         self._engine_version = None
     
     def _get_engine_version(self):
@@ -93,7 +91,7 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def date_trunc_sql(self, lookup_type, field_name):
         if lookup_type == 'year':
-             sql = "EXTRACT(year FROM %s)||'-01-01 00:00:00'" % field_name
+            sql = "EXTRACT(year FROM %s)||'-01-01 00:00:00'" % field_name
         elif lookup_type == 'month':
             sql = "EXTRACT(year FROM %s)||'-'||EXTRACT(month FROM %s)||'-01 00:00:00'" % (field_name, field_name)
         elif lookup_type == 'day':
@@ -120,14 +118,20 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def convert_values(self, value, field):
         return super(DatabaseOperations, self).convert_values(value, field)
-
-    def query_class(self, DefaultQueryClass):  
-        return query.query_class(DefaultQueryClass)
             
     def quote_name(self, name):
         if not name.startswith('"') and not name.endswith('"'):
             name = '"%s"' % util.truncate_name(name, self.max_name_length())
         return name.upper()
+    
+    def return_insert_id(self):
+        return "RETURNING %s", ()
+    
+    def savepoint_create_sql(self, sid):
+        return "SAVEPOINT " + self.quote_name(sid)
+
+    def savepoint_rollback_sql(self, sid):
+        return "ROLLBACK TO " + self.quote_name(sid)
 
     def get_generator_name(self, table_name):
         return '%s_GN' % util.truncate_name(table_name, self.max_name_length() - 3).upper()
@@ -135,34 +139,100 @@ class DatabaseOperations(BaseDatabaseOperations):
     def get_trigger_name(self, table_name):
         name_length = DatabaseOperations().max_name_length() - 3
         return '%s_TR' % util.truncate_name(table_name, self.max_name_length() - 3).upper()
+
+class DatabaseValidation(BaseDatabaseValidation):
+    pass
+
+class TypeTranslator(object):
+    db_charset_code = None
+    charset = None
     
+    def set_charset(self, db_charset):
+        self.db_charset_code = DB_CHARSET_TO_DB_CHARSET_CODE[db_charset]
+        self.charset = DB_CHARSET_TO_PYTHON_CHARSET[db_charset]
     
+    @property
+    def type_translate_in(self):
+        return {
+            'DATE': self.in_date,
+            'TIME': self.in_time,
+            'TIMESTAMP': self.in_timestamp,
+            'FIXED': self.in_fixed,
+            'TEXT': self.in_text,
+            'TEXT_UNICODE': self.in_unicode,
+            'BLOB': self.in_blob
+        }
+    
+    @property
+    def type_translate_out(self):
+        return {
+            'DATE': typeconv_dt.date_conv_out,
+            'TIME': typeconv_dt.time_conv_out,
+            'TIMESTAMP': typeconv_dt.timestamp_conv_out,
+            'FIXED': typeconv_fd.fixed_conv_out_precise,
+            'TEXT': self.out_text,
+            'TEXT_UNICODE': self.out_unicode,
+            'BLOB': self.out_blob
+        }
+    
+    def in_date(self, value):
+        if isinstance(value, basestring):
+            #Replaces 6 digits microseconds to 4 digits allowed in Firebird
+            value = value[:24]
+        return typeconv_dt.date_conv_in(value)
+    
+    def in_time(self, value):
+        if isinstance(value, datetime.datetime):
+            value = datetime.time(value.hour, value.minute, value.second, value.microsecond)
+        return typeconv_dt.time_conv_in(value)
+    
+    def in_timestamp(self, value):
+        if isinstance(value, basestring):
+            #Replaces 6 digits microseconds to 4 digits allowed in Firebird
+            value = value[:24]
+        return typeconv_dt.timestamp_conv_in(value)
+
+    def in_fixed(self, (value, scale)):
+        if value is not None:
+            if isinstance(value, basestring):
+                value = Decimal(value)
+            return typeconv_fd.fixed_conv_in_precise((value, scale))
+    
+    def in_text(self, text):
+        if text is not None:  
+            return smart_str(text, encoding=self.charset)
+    
+    def in_unicode(self, (text, charset)):
+        if text is not None:
+            return typeconv_tu.unicode_conv_in((smart_unicode(text), self.db_charset_code))
+
+    def in_blob(self, text): 
+        return typeconv_tu.unicode_conv_in((smart_unicode(text), self.db_charset_code))
+    
+    def out_text(self, text):
+        if text is not None:
+            return smart_unicode(text, encoding=self.charset)
+        return text
+    
+    def out_unicode(self, (text, charset)):
+        return typeconv_tu.unicode_conv_out((text, self.db_charset_code))
+
+    def out_blob(self, text):
+        return typeconv_tu.unicode_conv_out((text, self.db_charset_code))
+
 
 class DatabaseWrapper(BaseDatabaseWrapper):
-    """
-    Represents a database connection.
-    
-    Inherited from BaseDatabaseWrapper:
-     self.connection = None
-     self.queries = []
-     self.settings_dict = settings_dict
-    """
-    
-    import kinterbasdb.typeconv_datetime_stdlib as tc_dt
-    import kinterbasdb.typeconv_fixed_decimal as tc_fd
-    import kinterbasdb.typeconv_text_unicode as tc_tu
-    import django.utils.encoding as dj_ue
 
     operators = {
         'exact': '= %s',
         'iexact': '= UPPER(%s)',
         'contains': "LIKE %s ESCAPE'\\'",
-        'icontains': 'CONTAINING %s', #case is ignored
+        'icontains': 'LIKE UPPER(%s)', #case is ignored
         'gt': '> %s',
         'gte': '>= %s',
         'lt': '< %s',
         'lte': '<= %s',
-        'startswith': 'STARTING WITH %s', #looks to be faster then LIKE
+        'startswith': 'STARTING WITH %s', #looks to be faster than LIKE
         'endswith': "LIKE %s ESCAPE'\\'",
         'istartswith': 'STARTING WITH UPPER(%s)',
         'iendswith': "LIKE UPPER(%s) ESCAPE'\\'",
@@ -172,110 +242,37 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
         
         self._server_version = None
+        self._type_translator = TypeTranslator()
+        
         self.features = DatabaseFeatures()
         self.ops = DatabaseOperations()
         self.client = DatabaseClient(self)
         self.creation = DatabaseCreation(self)
         self.introspection = DatabaseIntrospection(self)
-        self.validation = BaseDatabaseValidation()
-        
-        
-    def ascii_conv_in(self, text):
-        if text is not None:  
-            return self.dj_ue.smart_str(text, 'ascii')
-
-    def ascii_conv_out(self, text):
-        if text is not None:
-            return self.dj_ue.smart_unicode(text)   
-
-    def blob_conv_in(self, text): 
-        return self.tc_tu.unicode_conv_in((self.dj_ue.smart_unicode(text), self.FB_CHARSET_CODE))
-
-    def blob_conv_out(self, text):
-        return self.tc_tu.unicode_conv_out((text, self.FB_CHARSET_CODE))   
-
-    def fixed_conv_in(self, (val, scale)):
-        if val is not None:
-            if isinstance(val, basestring):
-                val = decimal.Decimal(val)
-            return self.tc_fd.fixed_conv_in_precise((val, scale))
-
-    def timestamp_conv_in(self, timestamp):
-        if isinstance(timestamp, basestring):
-            #Replaces 6 digits microseconds to 4 digits allowed in Firebird
-            timestamp = timestamp[:24]
-        return self.tc_dt.timestamp_conv_in(timestamp)
-
-    def time_conv_in(self, value):
-        import datetime
-        if isinstance(value, datetime.datetime):
-            value = datetime.time(value.hour, value.minute, value.second, value.microsecond)
-        return self.tc_dt.time_conv_in(value)   
-
-    def date_conv_in(self, value):
-        if isinstance(value, basestring):
-            #Replaces 6 digits microseconds to 4 digits allowed in Firebird
-            value = value[:24]
-        return self.tc_dt.date_conv_in(value)
-
-    def unicode_conv_in(self, text):
-        if text[0] is not None:
-            return self.tc_tu.unicode_conv_in((self.dj_ue.smart_unicode(text[0]), self.FB_CHARSET_CODE))
-
-    def _do_connect(self):
-        settings_dict = self.settings_dict
-        db_options = {}
-        conn = {'charset': 'UNICODE_FSS'}            
-        if 'DATABASE_OPTIONS' in settings_dict:
-            db_options = settings_dict['DATABASE_OPTIONS']
-        conn['charset'] = db_options.get('charset', conn['charset'])
-        if settings_dict['DATABASE_NAME'] == '':
-            from django.core.exceptions import ImproperlyConfigured
-            raise ImproperlyConfigured("You need to specify DATABASE_NAME in your Django settings file.")
-        conn['dsn'] = settings_dict['DATABASE_NAME']
-        if settings_dict['DATABASE_HOST']:
-            conn['dsn'] = ('%s:%s') % (settings_dict['DATABASE_HOST'], conn['dsn'])
-        if settings_dict['DATABASE_PORT']:
-            conn['port'] = settings_dict['DATABASE_PORT']
-        if settings_dict['DATABASE_USER']:
-            conn['user'] = settings_dict['DATABASE_USER']
-        if settings_dict['DATABASE_PASSWORD']:
-            conn['password'] = settings_dict['DATABASE_PASSWORD']
-        try:
-            self.connection = Database.connect(**conn)
-        except OperationalError:
-            self.connection = Database.create_database(
-                "create database '%s' user '%s' password '%s' default character set %s"
-                            % (conn['dsn'], conn['user'], conn['password'], conn['charset']))
-
-        self.FB_CHARSET_CODE = 3 #UNICODE_FSS
-        if self.connection.charset == 'UTF8':
-            self.FB_CHARSET_CODE = 4 # UTF-8 with Firebird 2.0+
-        self.connection.set_type_trans_in({
-            'DATE':             self.date_conv_in,
-            'TIME':             self.time_conv_in,
-            'TIMESTAMP':        self.timestamp_conv_in,
-            'FIXED':            self.fixed_conv_in,
-            'TEXT':             self.ascii_conv_in,
-            'TEXT_UNICODE':     self.unicode_conv_in,
-            'BLOB':             self.blob_conv_in
-        })
-        self.connection.set_type_trans_out({
-            'DATE':             self.tc_dt.date_conv_out,
-            'TIME':             self.tc_dt.time_conv_out,
-            'TIMESTAMP':        self.tc_dt.timestamp_conv_out,
-            'FIXED':            self.tc_fd.fixed_conv_out_precise,
-            'TEXT':             self.ascii_conv_out,
-            'TEXT_UNICODE':     self.tc_tu.unicode_conv_out,
-            'BLOB':             self.blob_conv_out
-        })
-
+        self.validation = DatabaseValidation(self)
 
     def _cursor(self):
         if self.connection is None:
-            self._do_connect()
-        cursor = FirebirdCursorWrapper(self.connection)
-        return cursor
+            settings_dict = self.settings_dict
+            if settings_dict['NAME'] == '':
+                from django.core.exceptions import ImproperlyConfigured
+                raise ImproperlyConfigured("You need to specify DATABASE_NAME in your Django settings file.")
+            conn_params = {
+                'charset': 'UNICODE_FSS'
+            }
+            conn_params['dsn'] = settings_dict['NAME']
+            if settings_dict['HOST']:
+                conn_params['dsn'] = ('%s:%s') % (settings_dict['HOST'], conn_params['dsn'])
+            if settings_dict['PORT']:
+                conn_params['port'] = settings_dict['PORT']
+            if settings_dict['USER']:
+                conn_params['user'] = settings_dict['USER']
+            if settings_dict['PASSWORD']:
+                conn_params['password'] = settings_dict['PASSWORD']
+            conn_params.update(settings_dict['OPTIONS'])
+            self.connection = Database.connect(**conn_params)
+            self._type_translator.set_charset(self.connection.charset)
+        return FirebirdCursorWrapper(self.connection.cursor(), self._type_translator)
     
     def get_server_version(self):
         if not self._server_version:
@@ -295,11 +292,10 @@ class FirebirdCursorWrapper(object):
     See: http://kinterbasdb.sourceforge.net/dist_docs/usage.html for Dynamic Type Translation
     """
     
-    def __init__(self, connection):
-        self.cursor = connection.cursor()
-
-    def __getattr__(self, attr):
-        return getattr(self.cursor, attr)
+    def __init__(self, cursor, type_translator):
+        self.cursor = cursor
+        self.cursor.set_type_trans_in(type_translator.type_translate_in)
+        self.cursor.set_type_trans_out(type_translator.type_translate_out)
     
     def execute(self, query, params=()):
         cquery = self.convert_query(query, len(params))
@@ -318,24 +314,22 @@ class FirebirdCursorWrapper(object):
             raise DatabaseError("\n".join(output))
 
     def executemany(self, query, param_list):
-        #print 'cursor.executemany()', query, param_list
         try:
-          query = self.convert_query(query, len(param_list[0]))
-          return self.cursor.executemany(query, param_list)
+            query = self.convert_query(query, len(param_list[0]))
+            return self.cursor.executemany(query, param_list)
         except (IndexError,TypeError):
-          # No parameter list provided
-          return None
+            return None
 
     def convert_query(self, query, num_params):
         return query % tuple("?" * num_params)
+    
+    def __getattr__(self, attr):
+        if attr in self.__dict__:
+            return self.__dict__[attr]
+        else:
+            return getattr(self.cursor, attr)
 
-    def fetchone(self):
-        return self.cursor.fetchone()
-
-    def fetchmany(self, size=None):
-        return self.cursor.fetchmany(size)
-
-    def fetchall(self):
-        return self.cursor.fetchall()
+    def __iter__(self):
+        return iter(self.cursor)
 
 

@@ -1,5 +1,7 @@
-from django.conf import settings
-from django.db.backends.creation import BaseDatabaseCreation
+import sys, time
+import kinterbasdb as Database
+
+from django.db.backends.creation import BaseDatabaseCreation, TEST_DATABASE_PREFIX
 
 class DatabaseCreation(BaseDatabaseCreation):
     # This dictionary maps Field objects to their associated Firebird column
@@ -12,7 +14,8 @@ class DatabaseCreation(BaseDatabaseCreation):
 
     data_types = {
         'AutoField':         'integer',
-        'BooleanField':      'integer',
+        'BigIntegerField':   'bigint',
+        'BooleanField':      'smallint %% CHECK (%(qn_column)s IN (0,1))',
         'CharField':         'varchar(%(max_length)s)',
         'CommaSeparatedIntegerField': 'varchar(%(max_length)s)',
         'DateField':         'date',
@@ -42,10 +45,12 @@ class DatabaseCreation(BaseDatabaseCreation):
         opts = model._meta
         if not opts.managed:
             return [], {}
+        
         final_output = []
         table_output = []
         pending_references = {}
         qn = self.connection.ops.quote_name
+        print opts.local_fields
         for f in opts.local_fields:
             col_type = f.db_type()
             tablespace = f.db_tablespace or opts.db_tablespace
@@ -57,7 +62,7 @@ class DatabaseCreation(BaseDatabaseCreation):
             field_output = [style.SQL_FIELD(qn(f.column)), style.SQL_COLTYPE(col_type)]          
             if not f.null:
                 # Workaraund  for Firebird 1.5 : the NOT NULL keyword should be located after field constraint definition
-				# Mark '%' is 'NOT NULL' placeholder
+                # Mark '%' is 'NOT NULL' placeholder
                 if field_output[-1].find('%') == -1:
                     field_output.append(style.SQL_KEYWORD('NOT NULL'))
                 else:
@@ -79,9 +84,13 @@ class DatabaseCreation(BaseDatabaseCreation):
                 else:
                     field_output.extend(ref_output)
             table_output.append(' '.join(field_output))
-        if opts.order_with_respect_to:
-            table_output.append(style.SQL_FIELD(qn('_order')) + ' ' + \
-                style.SQL_COLTYPE(models.IntegerField().db_type()))
+
+        if len(table_output) == 0:
+            return final_output, pending_references
+             
+        #if opts.order_with_respect_to:
+        #    table_output.append(style.SQL_FIELD(qn('_order')) + ' ' + style.SQL_COLTYPE(models.IntegerField().db_type()))
+        
         for field_constraints in opts.unique_together:
             table_output.append(style.SQL_KEYWORD('UNIQUE') + ' (%s)' % \
                 ", ".join([style.SQL_FIELD(qn(opts.get_field(f).column)) for f in field_constraints]))
@@ -90,6 +99,7 @@ class DatabaseCreation(BaseDatabaseCreation):
         for i, line in enumerate(table_output): # Combine and add commas.
             full_statement.append('    %s%s' % (line, i < len(table_output)-1 and ',' or ''))
         full_statement.append(')')
+        
         if opts.db_tablespace:
             full_statement.append(self.connection.ops.tablespace_sql(opts.db_tablespace))
         full_statement.append(';')
@@ -104,4 +114,79 @@ class DatabaseCreation(BaseDatabaseCreation):
                     final_output.append(stmt)
 
         return final_output, pending_references
+    
+    def _get_connection_params(self, **overrides):
+        settings_dict = self.connection.settings_dict
+        conn_params = {
+            'charset': 'UNICODE_FSS'
+        }
+        conn_params['database'] = settings_dict['NAME']
+        if settings_dict['HOST']:
+            conn_params['dsn'] = settings_dict['HOST']
+        if settings_dict['PORT']:
+            conn_params['port'] = settings_dict['PORT']
+        if settings_dict['USER']:
+            conn_params['user'] = settings_dict['USER']
+        if settings_dict['PASSWORD']:
+            conn_params['password'] = settings_dict['PASSWORD']
+        conn_params.update(settings_dict['OPTIONS'])
+        conn_params.update(overrides)
+        return conn_params
+    
+    def _rollback_works(self):
+        cursor = self.connection.cursor()
+        cursor.execute('CREATE TABLE ROLLBACK_TEST (X INT)')
+        self.connection._commit()
+        cursor.execute('INSERT INTO ROLLBACK_TEST (X) VALUES (8)')
+        self.connection._rollback()
+        cursor.execute('SELECT COUNT(X) FROM ROLLBACK_TEST')
+        count, = cursor.fetchone()
+        #cursor.execute('DROP TABLE ROLLBACK_TEST')
+        #self.connection._commit()
+        return count == 0
+    
+    def _create_test_db(self, verbosity, autoclobber):
+        "Internal implementation - creates the test db tables."
+        suffix = self.sql_table_creation_suffix()
+
+        if self.connection.settings_dict['TEST_NAME']:
+            test_database_name = self.connection.settings_dict['TEST_NAME']
+        else:
+            test_database_name = TEST_DATABASE_PREFIX + self.connection.settings_dict['NAME']
+
+        qn = self.connection.ops.quote_name
+        
+        try:
+            self._create_database(test_database_name)
+        except Exception, e:
+            sys.stderr.write("Got an error creating the test database: %s\n" % e)
+            if not autoclobber:
+                confirm = raw_input("Type 'yes' if you would like to try deleting the test database '%s', or 'no' to cancel: " % test_database_name)
+            if autoclobber or confirm == 'yes':
+                try:
+                    if verbosity >= 1:
+                        print "Destroying old test database..."
+                    self._destroy_test_db(test_database_name, verbosity)
+                    if verbosity >= 1:
+                        print "Creating test database..."
+                    self._create_database(test_database_name)
+                except Exception, e:
+                    sys.stderr.write("Got an error recreating the test database: %s\n" % e)
+                    sys.exit(2)
+            else:
+                print "Tests cancelled."
+                sys.exit(1)
+
+        return test_database_name
+    
+    def _create_database(self, test_database_name):
+        params = self._get_connection_params(database=test_database_name)
+        conn_str = "CREATE DATABASE '%(dsn)s:%(database)s' user '%(user)s' password '%(password)s'" % params
+        connection = Database.create_database(conn_str)
+        connection.close()
+
+    def _destroy_test_db(self, test_database_name, verbosity):
+        connection = Database.connect(**self._get_connection_params(database=test_database_name))
+        connection.drop_database()
+        connection.close()
 
