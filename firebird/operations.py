@@ -139,13 +139,13 @@ class DatabaseOperations(BaseDatabaseOperations):
         FIELD = style.SQL_FIELD
         COLTYPE = style.SQL_COLTYPE
         if self.firebird_version[0] < 2:
-            reset_value_sql = 'SET GENERATOR %(sequence_name)s TO'
+            reset_value_sql = 'SET GENERATOR %(sequence_name)s TO '
         else:
-            reset_value_sql = 'ALTER SEQUENCE %(sequence_name)s RESTART WITH'
+            reset_value_sql = 'ALTER SEQUENCE %(sequence_name)s RESTART WITH '
         procedure_sql = '\n'.join([
             '%s %s' % (KEYWORD('CREATE PROCEDURE'), TABLE('%(procedure_name)s')),
             KEYWORD('AS'),
-            '%s %s %s' % ( \
+            '%s %s %s;' % ( \
                 KEYWORD('DECLARE VARIABLE'), FIELD('start_value'), COLTYPE('INTEGER')),
             KEYWORD('BEGIN'),
             '   %s gen_id(%s, coalesce(max(%s), 0) - gen_id(%s, 0))' % ( \
@@ -154,7 +154,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             '   %s %s into %s;' % ( \
                 KEYWORD('FROM'), TABLE('%(table_name)s'), FIELD(':start_value')),
             "   %s '%s' || %s || ';';" % ( \
-                KEYWORD('EXECUTE STATMENT'), reset_value_sql, FIELD(':start_value')),
+                KEYWORD('EXECUTE STATEMENT'), reset_value_sql, FIELD(':start_value')),
             '   %s;' % KEYWORD('suspend'),
             '%s;' % KEYWORD('END')
         ])
