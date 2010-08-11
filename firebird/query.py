@@ -53,12 +53,6 @@ def query_class(QueryClass):
             if where:
                 result.append('WHERE %s' % where)
                 params.extend(w_params)
-            if self.extra_where:
-                if not where:
-                    result.append('WHERE')
-                else:
-                    result.append('AND')
-                result.append(' AND '.join(self.extra_where))
     
             grouping, gb_params = self.get_grouping()
             if grouping:
@@ -83,7 +77,6 @@ def query_class(QueryClass):
             if ordering:
                 result.append('ORDER BY %s' % ', '.join(ordering))
     
-            params.extend(self.extra_params)
             return ' '.join(result), tuple(params)
     _classes[QueryClass] = FirebirdQuery
     return FirebirdQuery
