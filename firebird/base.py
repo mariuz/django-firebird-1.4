@@ -171,6 +171,10 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self.connection = Database.connect(**conn_params)
             self._type_translator.set_charset(self.connection.charset, encoding)
             connection_created.send(sender=self.__class__)
+            
+            if self.ops.firebird_version[0] >= 2:
+                self.features.can_return_id_from_insert = True
+                
         return FirebirdCursorWrapper(self.connection.cursor(), self._type_translator)
     
     def get_server_version(self):
