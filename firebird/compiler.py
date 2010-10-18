@@ -1,6 +1,4 @@
 from django.db.models.sql import compiler
-from django.db.models.sql.query import get_order_dir
-from django.db.models.sql.constants import *
 from django.db.models.fields import AutoField
 from django.db.utils import DatabaseError
 
@@ -67,18 +65,16 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
             cols.append(qn(opts.pk.column))
         for c in self.query.columns:
             cols.append(qn(c))
-        sql.append('(%s)' % ', '.join([c for c in cols]))    
+        sql.append('(%s)' % ', '.join(cols))
       
         # Build values placeholders
         vals = []
         if pk_auto:
             self._pk_val = self._get_pk_next_value(opts.db_table, opts.pk.column)
-            vals.append(self._pk_val)
+            vals.append(str(self._pk_val))
         for v in self.query.values:
             vals.append(self.placeholder(*v))
-        values = [v for v in vals]
-        
-        sql.append('VALUES (%s)' % ', '.join(values))
+        sql.append('VALUES (%s)' % ', '.join(vals))
         
         params = self.query.params
         if self.return_id and self.connection.features.can_return_id_from_insert:
