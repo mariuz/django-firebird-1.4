@@ -32,7 +32,10 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
         cursor.execute("""select rdb$relation_name from rdb$relations
             where rdb$system_flag=0 and rdb$view_source is null
             order by rdb$relation_name""")
-        return [r[0].strip() for r in cursor.fetchall()]
+        return [r[0].strip().lower() for r in cursor.fetchall()]
+    
+    def table_name_converter(self, name):
+        return name.lower()
 
     def get_table_description(self, cursor, table_name):
         "Returns a description of the table, with the DB-API cursor.description interface."
