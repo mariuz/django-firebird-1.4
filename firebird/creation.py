@@ -4,7 +4,7 @@ import kinterbasdb as Database
 from django.db.backends.creation import BaseDatabaseCreation, TEST_DATABASE_PREFIX
 from django.db.backends.mysql.creation import DatabaseCreation
 
-TEST_MODE = 2
+TEST_MODE = 0
 
 class DatabaseCreation(BaseDatabaseCreation):
     # This dictionary maps Field objects to their associated Firebird column
@@ -38,7 +38,7 @@ class DatabaseCreation(BaseDatabaseCreation):
         'TextField':         'blob sub_type 1',
         'TimeField':         'time',
     }
-    
+
     def sql_for_inline_foreign_key_references(self, field, known_models, style):
         # Always pending
         return [], TEST_MODE < 2
@@ -48,12 +48,12 @@ class DatabaseCreation(BaseDatabaseCreation):
             final_output = super(DatabaseCreation, self).sql_for_pending_references(model, style, pending_references)
             return ['%s ON DELETE CASCADE;' % s[:-1] for s in final_output]
         return []
-    
+
     def sql_remove_table_constraints(self, model, references_to_delete, style):
         if TEST_MODE < 2:
             return super(DatabaseCreation, self).sql_remove_table_constraints(model, references_to_delete, style)
         return []
-    
+
     def _get_connection_params(self, **overrides):
         settings_dict = self.connection.settings_dict
         conn_params = {
@@ -71,7 +71,7 @@ class DatabaseCreation(BaseDatabaseCreation):
         conn_params.update(settings_dict['OPTIONS'])
         conn_params.update(overrides)
         return conn_params
-    
+
     def _rollback_works(self):
         cursor = self.connection.cursor()
         cursor.execute('CREATE TABLE ROLLBACK_TEST (X INT)')
@@ -83,7 +83,7 @@ class DatabaseCreation(BaseDatabaseCreation):
         #cursor.execute('DROP TABLE ROLLBACK_TEST')
         #self.connection._commit()
         return count == 0
-    
+
     def _create_test_db(self, verbosity, autoclobber):
         "Internal implementation - creates the test db tables."
         suffix = self.sql_table_creation_suffix()
@@ -94,7 +94,7 @@ class DatabaseCreation(BaseDatabaseCreation):
             test_database_name = TEST_DATABASE_PREFIX + self.connection.settings_dict['NAME']
 
         qn = self.connection.ops.quote_name
-        
+
         try:
             self._create_database(test_database_name)
         except Exception, e:
@@ -117,7 +117,7 @@ class DatabaseCreation(BaseDatabaseCreation):
                 sys.exit(1)
 
         return test_database_name
-    
+
     def _create_database(self, test_database_name):
         params = self._get_connection_params(database=test_database_name)
         connection = Database.create_database("""

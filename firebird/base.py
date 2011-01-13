@@ -40,6 +40,7 @@ OperationalError = Database.OperationalError
 class DatabaseFeatures(BaseDatabaseFeatures):
     can_return_id_from_insert = False
     uses_savepoints = False
+    allows_group_by_pk = True
 
 class DatabaseValidation(BaseDatabaseValidation):
     pass
@@ -48,12 +49,12 @@ class TypeTranslator(object):
     #db_charset_code = None
     #charset = None
     encoding = None
-    
+
     def set_charset(self, db_charset, encoding):
         #self.db_charset_code = DB_CHARSET_TO_DB_CHARSET_CODE[db_charset]
         #self.charset = DB_CHARSET_TO_PYTHON_CHARSET[db_charset]
         self.encoding = DB_CHARSET_TO_PYTHON_CHARSET.get(db_charset, encoding)
-    
+
     @property
     def type_translate_in(self):
         return {
@@ -65,40 +66,39 @@ class TypeTranslator(object):
             'TEXT_UNICODE': self.in_text_unicode, #typeconv_tu.unicode_conv_in,
             'BLOB': self.in_text
         }
-    
+
     def in_date(self, value):
         if isinstance(value, basestring):
             value = value[:24]
         return typeconv_dt.date_conv_in(value)
-    
+
     def in_time(self, value):
         if isinstance(value, datetime.datetime):
             value = value.time()
         return typeconv_dt.time_conv_in(value)
-    
+
     def in_timestamp(self, value):
         if isinstance(value, basestring):
             value = value[:24]
         return typeconv_dt.timestamp_conv_in(value)
-    
+
     def in_fixed(self, (value, scale)):
         if value is not None:
             if isinstance(value, basestring):
                 value = Decimal(value)
             return typeconv_fd.fixed_conv_in_precise((value, scale))
-    
+
     def in_text(self, value):
         if value is not None:
             value = smart_str(value, self.encoding)
         return value
-    
+
     def in_text_unicode(self, (value, charset)):
         if value is not None:
-            #value = force_unicode(value, self.encoding)
             return smart_str(value, self.encoding)
         return value
         #return typeconv_tu.unicode_conv_in((value, charset))
-    
+
     @property
     def type_translate_out(self):
         return {
@@ -110,16 +110,16 @@ class TypeTranslator(object):
             'TEXT_UNICODE': typeconv_tu.unicode_conv_out,
             'BLOB': self.out_text
         }
-    
+
     def out_text(self, value):
         if value is not None:
             value = smart_unicode(value, self.encoding)
         return value
 
 class DatabaseWrapper(BaseDatabaseWrapper):
-
+    vendor = 'firebird'
     operators = {
-        'exact': '= %s', 
+        'exact': '= %s',
         'iexact': '= UPPER(%s)',
         'contains': "LIKE %s ESCAPE'\\'",
         'icontains': "LIKE UPPER(%s) ESCAPE'\\'", #'CONTAINING %s', #case is ignored
@@ -135,10 +135,10 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     def __init__(self, *args, **kwargs):
         super(DatabaseWrapper, self).__init__(*args, **kwargs)
-        
+
         self._server_version = None
         self._type_translator = TypeTranslator()
-        
+
         self.features = DatabaseFeatures()
         self.ops = DatabaseOperations(self)
         self.client = DatabaseClient(self)
@@ -171,16 +171,16 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             self.connection = Database.connect(**conn_params)
             self._type_translator.set_charset(self.connection.charset, encoding)
             connection_created.send(sender=self.__class__)
-            
+
             if self.ops.firebird_version[0] >= 2:
                 self.features.can_return_id_from_insert = True
-                
+
         return FirebirdCursorWrapper(self.connection.cursor(), self._type_translator)
-    
+
     def get_server_version(self):
-        """ 
+        """
         Access method for engine_version property.
-        engine_version return a full version in string format 
+        engine_version return a full version in string format
         (ie: 'WI-V6.3.5.4926 Firebird 1.5' )
         """
         if not self._server_version:
@@ -194,18 +194,18 @@ class FirebirdCursorWrapper(object):
     Django uses "format" style placeholders, but firebird uses "qmark" style.
     This fixes it -- but note that if you want to use a literal "%s" in a query,
     you'll need to use "%%s".
-    
+
     We need to do some data translation too.
     See: http://kinterbasdb.sourceforge.net/dist_docs/usage.html for Dynamic Type Translation
     """
     codes_for_integrityerror = (-803, -625)
-    
+
     def __init__(self, cursor, type_translator):
         self.cursor = cursor
         self.encoding = type_translator.encoding
         self.cursor.set_type_trans_in(type_translator.type_translate_in)
         self.cursor.set_type_trans_out(type_translator.type_translate_out)
-    
+
     def execute(self, query, params=()):
         cquery = self.convert_query(query, len(params))
         try:
@@ -237,10 +237,10 @@ class FirebirdCursorWrapper(object):
         # But if the connection charset is NONE, ASCII or OCTETS it will fail.
         # So we convert it to string first.
         return smart_str(query % tuple("?" * num_params), self.encoding)
-    
+
     def error_info(self, e, q, p):
         return tuple([e[0], '%s -- %s' % (e[1], q % p)])
-    
+
     def __getattr__(self, attr):
         if attr in self.__dict__:
             return self.__dict__[attr]

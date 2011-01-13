@@ -8,10 +8,11 @@ class DatabaseOperations(BaseDatabaseOperations):
         self.connection = connection
 
     def _get_firebird_version(self):
-        """ 
+        """
         Access method for firebird_version property.
-        firebird_version return the version number in a object list format
-        Useful for ask for just a part of a version number, for instance, major version is firebird_version[0]  
+        firebird_version return the version number in an object list format
+        Useful for ask for just a part of a version number.
+        (e.g. major version is firebird_version[0])
         """
         server_version = self.connection.get_server_version()
         return [int(val) for val in server_version.split()[-1].split('.')]
@@ -23,7 +24,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         INVALID = ('STDDEV_SAMP', 'STDDEV_POP', 'VAR_SAMP', 'VAR_POP')
         if aggregate_func.sql_function in INVALID:
             raise NotImplementedError
-        
+
         if isinstance(aggregate_func, Avg):
             aggregate_func.sql_template = '%(function)s(CAST(%(field)s as double precision))'
 
@@ -41,13 +42,13 @@ class DatabaseOperations(BaseDatabaseOperations):
         elif lookup_type == 'day':
             sql = "EXTRACT(year FROM %s)||'-'||EXTRACT(month FROM %s)||'-'||EXTRACT(day FROM %s)||' 00:00:00'" % (field_name, field_name, field_name)
         return "CAST(%s AS TIMESTAMP)" % sql
-    
+
     def lookup_cast(self, lookup_type):
         if lookup_type in ('iexact', 'icontains', 'istartswith', 'iendswith'):
         #if lookup_type in ('iexact', 'istartswith', 'iendswith'):
             return "UPPER(%s)"
         return "%s"
-    
+
     def __fulltext_search_sql(self, field_name):
         # We use varchar for TextFields so this is possible
         # Look at http://www.volny.cz/iprenosil/interbase/ip_ib_strings.htm
@@ -65,7 +66,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         if value is not None and field and field.get_internal_type() == 'DecimalField':
             value = util.typecast_decimal(field.format_number(value))
         return value
-    
+
     def ___value_to_db_datetime(self, value):
         value = super(DatabaseOperations, self).value_to_db_datetime(value)
         if isinstance(value, basestring):
@@ -74,22 +75,22 @@ class DatabaseOperations(BaseDatabaseOperations):
         #return value
         print value
         return typeconv_dt.timestamp_conv_in(value)
-    
+
     def year_lookup_bounds(self, value):
         first = '%s-01-01 00:00:00'
         second = '%s-12-31 23:59:59.9999'
         return [first % value, second % value]
-    
+
     def year_lookup_bounds_for_date_field(self, value):
         first = '%s-01-01'
         second = '%s-12-31'
         return [first % value, second % value]
-            
+
     def quote_name(self, name):
         if not name.startswith('"') and not name.endswith('"'):
             name = '"%s"' % util.truncate_name(name, self.max_name_length())
         return name.upper()
-    
+
     def pk_default_value(self):
         return 'NULL'
 
@@ -104,7 +105,7 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def savepoint_rollback_sql(self, sid):
         return "ROLLBACK TO " + self.quote_name(sid)
-    
+
     def autoinc_sql(self, table, column):
         sequence_name = get_autoinc_sequence_name(self, table)
         trigger_name = get_autoinc_sequence_name(self, table)
@@ -117,7 +118,7 @@ class DatabaseOperations(BaseDatabaseOperations):
         else:
             sequence_sql = 'CREATE SEQUENCE %s;' % sequence_name
             next_value_sql = 'NEXT VALUE FOR %s' % sequence_name
-        
+
         trigger_sql = '\n'.join([
             'CREATE TRIGGER %(trigger_name)s FOR %(table_name)s',
             'BEFORE INSERT AS',
@@ -126,12 +127,12 @@ class DatabaseOperations(BaseDatabaseOperations):
             '      new.%(column_name)s = %(next_value_sql)s;',
             'END'
         ]) % locals()
-        
+
         return sequence_sql, trigger_sql
-    
+
     def sequence_reset_sql(self, style, model_list):
         from django.db import models
-        
+
         qn = self.quote_name
         output, procedures = [], []
         KEYWORD = style.SQL_KEYWORD
@@ -182,7 +183,7 @@ class DatabaseOperations(BaseDatabaseOperations):
             output.append('%s %s' % (KEYWORD('DROP PROCEDURE'), TABLE(procedure)))
 
         return output
-    
+
     def sql_flush(self, style, tables, sequences):
         if tables:
             sql = ['%s %s %s;' % \
@@ -192,7 +193,7 @@ class DatabaseOperations(BaseDatabaseOperations):
                      ) for table in tables]
             for generator_info in sequences:
                 table_name = generator_info['table']
-                query = "%s %s %s 0;" % (style.SQL_KEYWORD('SET GENERATOR'), 
+                query = "%s %s %s 0;" % (style.SQL_KEYWORD('SET GENERATOR'),
                     self.get_generator_name(table_name), style.SQL_KEYWORD('TO'))
                 sql.append(query)
             return sql
