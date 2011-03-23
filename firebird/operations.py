@@ -49,10 +49,10 @@ class DatabaseOperations(BaseDatabaseOperations):
             return "UPPER(%s)"
         return "%s"
 
-    def __fulltext_search_sql(self, field_name):
+    def fulltext_search_sql(self, field_name):
         # We use varchar for TextFields so this is possible
         # Look at http://www.volny.cz/iprenosil/interbase/ip_ib_strings.htm
-        return '%%s CONTAINING %s' % self.quote_name(field_name)
+        return '%s CONTAINING %%s' % self.quote_name(field_name)
 
     def last_insert_id(self, cursor, table, column):
         cursor.execute('SELECT GEN_ID(%s, 0) FROM rdb$database' % get_autoinc_sequence_name(self, table))
