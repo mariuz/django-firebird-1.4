@@ -6,11 +6,12 @@ Requires kinterbasdb: http://www.firebirdsql.org/index.php?op=devel&sub=python
 
 import sys
 import datetime
+
 try:
     from decimal import Decimal
 except ImportError:
     from django.utils._decimal import Decimal
-from django.utils.encoding import smart_str, smart_unicode, force_unicode
+
 
 try:
     import kinterbasdb as Database
@@ -24,6 +25,7 @@ except ImportError, e:
 from django.db import utils
 from django.db.backends import *
 from django.db.backends.signals import connection_created
+from django.utils.encoding import smart_str, smart_unicode
 
 from operations import DatabaseOperations
 from client import DatabaseClient
@@ -41,6 +43,23 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     can_return_id_from_insert = False
     uses_savepoints = False
     allows_group_by_pk = True
+
+    def _supports_transactions(self):
+        "Confirm support for transactions"
+        cursor = self.connection.cursor()
+        cursor.execute('CREATE TABLE ROLLBACK_TEST (X INT)')
+        self.connection._commit()
+
+        cursor.execute('INSERT INTO ROLLBACK_TEST (X) VALUES (8)')
+        self.connection._rollback()
+
+        cursor.execute('SELECT COUNT(X) FROM ROLLBACK_TEST')
+        count, = cursor.fetchone()
+
+        cursor.execute('DROP TABLE ROLLBACK_TEST')
+        #self.connection._commit()
+
+        return count == 0
 
 class DatabaseValidation(BaseDatabaseValidation):
     pass
@@ -139,7 +158,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self._server_version = None
         self._type_translator = TypeTranslator()
 
-        self.features = DatabaseFeatures()
+        self.features = DatabaseFeatures(self)
         self.ops = DatabaseOperations(self)
         self.client = DatabaseClient(self)
         self.creation = DatabaseCreation(self)

@@ -18,6 +18,31 @@ class DatabaseOperations(BaseDatabaseOperations):
         return [int(val) for val in server_version.split()[-1].split('.')]
     firebird_version = property(_get_firebird_version)
 
+    def autoinc_sql(self, table, column):
+        sequence_name = get_autoinc_sequence_name(self, table)
+        trigger_name = get_autoinc_sequence_name(self, table)
+        table_name = self.quote_name(table)
+        column_name = self.quote_name(column)
+
+        if self.firebird_version[0] < 2:
+            sequence_sql = 'CREATE GENERATOR %s;' % sequence_name
+            next_value_sql = 'GEN_ID(%s, 1)' % sequence_name
+        else:
+            sequence_sql = 'CREATE SEQUENCE %s;' % sequence_name
+            next_value_sql = 'NEXT VALUE FOR %s' % sequence_name
+
+        trigger_sql = '\n'.join([
+            'CREATE TRIGGER %(trigger_name)s FOR %(table_name)s',
+            'BEFORE INSERT AS',
+            'BEGIN',
+            '   IF(new.%(column_name)s IS NULL) THEN',
+            '      new.%(column_name)s = %(next_value_sql)s;',
+            'END'
+        ]) % locals()
+
+        return sequence_sql, trigger_sql
+
+
     def check_aggregate_support(self, aggregate_func):
         from django.db.models.sql.aggregates import Avg
 
@@ -100,35 +125,17 @@ class DatabaseOperations(BaseDatabaseOperations):
     def return_insert_id(self):
         return "RETURNING %s", ()
 
+    def random_function_sql(self):
+        """
+        Returns a SQL expression that returns a random value.
+        """
+        return 'RAND()'
+
     def savepoint_create_sql(self, sid):
         return "SAVEPOINT " + self.quote_name(sid)
 
     def savepoint_rollback_sql(self, sid):
         return "ROLLBACK TO " + self.quote_name(sid)
-
-    def autoinc_sql(self, table, column):
-        sequence_name = get_autoinc_sequence_name(self, table)
-        trigger_name = get_autoinc_sequence_name(self, table)
-        table_name = self.quote_name(table)
-        column_name = self.quote_name(column)
-
-        if self.firebird_version[0] < 2:
-            sequence_sql = 'CREATE GENERATOR %s;' % sequence_name
-            next_value_sql = 'GEN_ID(%s, 1)' % sequence_name
-        else:
-            sequence_sql = 'CREATE SEQUENCE %s;' % sequence_name
-            next_value_sql = 'NEXT VALUE FOR %s' % sequence_name
-
-        trigger_sql = '\n'.join([
-            'CREATE TRIGGER %(trigger_name)s FOR %(table_name)s',
-            'BEFORE INSERT AS',
-            'BEGIN',
-            '   IF(new.%(column_name)s IS NULL) THEN',
-            '      new.%(column_name)s = %(next_value_sql)s;',
-            'END'
-        ]) % locals()
-
-        return sequence_sql, trigger_sql
 
     def sequence_reset_sql(self, style, model_list):
         from django.db import models
@@ -199,6 +206,9 @@ class DatabaseOperations(BaseDatabaseOperations):
             return sql
         else:
             return []
+
+    def get_generator_name(self, table_name):
+        return get_autoinc_sequence_name(self, table_name)
 
 def get_autoinc_sequence_name(ops, table):
     return ops.quote_name('%s_SQ' % util.truncate_name(table, ops.max_name_length() - 3))
