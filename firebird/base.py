@@ -6,11 +6,12 @@ Requires kinterbasdb: http://www.firebirdsql.org/index.php?op=devel&sub=python
 
 import sys
 import datetime
+
 try:
     from decimal import Decimal
 except ImportError:
     from django.utils._decimal import Decimal
-from django.utils.encoding import smart_str, smart_unicode, force_unicode
+
 
 try:
     import kinterbasdb as Database
@@ -24,6 +25,7 @@ except ImportError, e:
 from django.db import utils
 from django.db.backends import *
 from django.db.backends.signals import connection_created
+from django.utils.encoding import smart_str, smart_unicode
 
 from operations import DatabaseOperations
 from client import DatabaseClient
