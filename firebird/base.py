@@ -141,7 +141,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self._server_version = None
         self._type_translator = TypeTranslator()
 
-        self.features = DatabaseFeatures()
+        self.features = DatabaseFeatures(self)
         self.ops = DatabaseOperations(self)
         self.client = DatabaseClient(self)
         self.creation = DatabaseCreation(self)
