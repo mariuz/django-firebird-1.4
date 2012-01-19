@@ -23,7 +23,7 @@ class SQLCompiler(compiler.SQLCompiler):
 
 class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
     def _get_seq_name(self, db_table):
-        return db_table.upper() + '_SEQ'
+        return db_table.upper() + '_SQ'
 
     def _get_seq_next_value(self, db_table):
         seq_name = self._get_seq_name(db_table)
@@ -59,11 +59,13 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
         opts = self.query.model._meta
         sql = ['INSERT INTO %s' % qn(opts.db_table)]
 
+        # If primary key field is assigned explicity when a new models instance
+        # is created, we don't need to generate a new value (sequece) for pk
+        # field and also the pk column will be include en self.query.columns.
         pk_auto = opts.pk and isinstance(opts.pk, AutoField)
         if pk_auto:
             pk_col = opts.pk.column
         pk_include = pk_auto and (pk_col.lower() in self.query.columns)
-
 
         # Build columns names
         cols = []
@@ -101,7 +103,7 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
 
         if meta.has_auto_field:
             # db_column is None if not explicitly specified by model field
-            auto_field_column = meta.auto_field.db_column or meta.auto_field.column
+            #auto_field_column = meta.auto_field.db_column or meta.auto_field.column
             sql, params = self._get_sql()
         else:
             sql, params = super(SQLInsertCompiler, self).as_sql(*args, **kwargs)
@@ -109,6 +111,11 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
         return sql, params
 
     def execute_sql(self, return_id=False):
+        # How we avoid to use trigger for pk value generator, the primary key
+        # field vale is stored and return it instead use of _last_insert_id
+        # which is not safe. If the database is FB 2.0 or latter the RETURNING
+        # clause is used.
+
         self._pk_val = None
         self.return_id = return_id
         cursor = super(SQLCompiler, self).execute_sql(None)

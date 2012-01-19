@@ -258,7 +258,7 @@ class FirebirdCursorWrapper(object):
         return smart_str(query % tuple("?" * num_params), self.encoding)
 
     def error_info(self, e, q, p):
-        return tuple([e[0], '%s -- %s' % (e[1], q % p)])
+        return tuple([e[0], '%s -- %s' % (e[1], q % tuple(p))])
 
     def __getattr__(self, attr):
         if attr in self.__dict__:

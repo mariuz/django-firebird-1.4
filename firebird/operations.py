@@ -42,7 +42,6 @@ class DatabaseOperations(BaseDatabaseOperations):
 
         return sequence_sql, trigger_sql
 
-
     def check_aggregate_support(self, aggregate_func):
         from django.db.models.sql.aggregates import Avg
 
