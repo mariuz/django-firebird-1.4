@@ -33,13 +33,13 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
             where rdb$system_flag=0 and rdb$view_source is null
             order by rdb$relation_name""")
         return [r[0].strip().lower() for r in cursor.fetchall()]
-
+    
     def table_name_converter(self, name):
         return name.lower()
 
     def get_table_description(self, cursor, table_name):
         "Returns a description of the table, with the DB-API cursor.description interface."
-        tbl_name = "'%s'" % self.table_name_converter(table_name)
+        tbl_name = "'%s'" % table_name
         cursor.execute("""
             select
               rf.rdb$field_name
@@ -47,8 +47,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
                   when (f.rdb$field_type in (7,8,16)) and (f.rdb$field_sub_type > 0) then
                     160 + f.rdb$field_sub_type
                   else
-                    f.rdb$field_type
-                end
+                    f.rdb$field_type end
               , f.rdb$field_length
               , f.rdb$field_precision
               , f.rdb$field_scale * -1
@@ -56,12 +55,12 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
             from
               rdb$relation_fields rf join rdb$fields f on (rf.rdb$field_source = f.rdb$field_name)
             where
-              upper(rf.rdb$relation_name) = upper(%s)
+              rf.rdb$relation_name = %s
             order by
               rf.rdb$field_position
             """ % (tbl_name,))
         return [(r[0].strip(), r[1], r[2], r[2] or 0, r[3], r[4], not (r[5] == 1)) for r in cursor.fetchall()]
-
+        
     def get_relations(self, cursor, table_name):
         """
         Returns a dictionary of {field_index: (field_index_other_table, other_table)}
