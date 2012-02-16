@@ -43,6 +43,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     can_return_id_from_insert = False
     uses_savepoints = False
     allows_group_by_pk = True
+    supports_forward_references = False
 
     def _supports_transactions(self):
         "Confirm support for transactions"

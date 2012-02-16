@@ -206,6 +206,9 @@ class DatabaseOperations(BaseDatabaseOperations):
         else:
             return []
 
+    def drop_sequence_sql(self, table):
+        return 'DROP GENERATOR %s' % self.get_generator_name(table)
+
     def get_generator_name(self, table_name):
         return get_autoinc_sequence_name(self, table_name)
 
