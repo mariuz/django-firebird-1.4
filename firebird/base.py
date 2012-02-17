@@ -147,10 +147,12 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         'gte': '>= %s',
         'lt': '< %s',
         'lte': '<= %s',
-        'startswith': "LIKE %s ESCAPE'\\'", #'STARTING WITH %s', #looks to be faster then LIKE
+        'startswith': "LIKE %s ESCAPE'\\'", #'STARTING WITH %s', #looks to be faster than LIKE
         'endswith': "LIKE %s ESCAPE'\\'",
         'istartswith': "LIKE UPPER(%s) ESCAPE'\\'", #'STARTING WITH UPPER(%s)',
         'iendswith': "LIKE UPPER(%s) ESCAPE'\\'",
+        'regex': "SIMILAR TO %s",
+        'iregex': "SIMILAR TO %s", # Case Sensitive depends on collation
     }
 
     def __init__(self, *args, **kwargs):
