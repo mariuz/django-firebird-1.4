@@ -44,6 +44,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     uses_savepoints = False
     allows_group_by_pk = True
     supports_forward_references = False
+    has_bulk_insert = False
 
     def _supports_transactions(self):
         "Confirm support for transactions"
@@ -228,7 +229,10 @@ class FirebirdCursorWrapper(object):
         self.cursor.set_type_trans_in(type_translator.type_translate_in)
         self.cursor.set_type_trans_out(type_translator.type_translate_out)
 
-    def execute(self, query, params=()):
+    def execute(self, query, params=None):
+        if params is None:
+            params = []
+
         cquery = self.convert_query(query, len(params))
         try:
             return self.cursor.execute(cquery, params)

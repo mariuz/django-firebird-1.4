@@ -3,8 +3,8 @@ from django.db.backends import BaseDatabaseOperations, util
 class DatabaseOperations(BaseDatabaseOperations):
     compiler_module = "firebird.compiler"
 
-    def __init__(self, connection, *args, **kwargs):
-        super(DatabaseOperations, self).__init__(*args, **kwargs)
+    def __init__(self, connection):
+        super(DatabaseOperations, self).__init__(connection)
         self.connection = connection
 
     def _get_firebird_version(self):
@@ -69,9 +69,15 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def lookup_cast(self, lookup_type):
         if lookup_type in ('iexact', 'icontains', 'istartswith', 'iendswith'):
-        #if lookup_type in ('iexact', 'istartswith', 'iendswith'):
             return "UPPER(%s)"
         return "%s"
+
+    def for_update_sql(self, nowait=False):
+        """
+        Returns the FOR UPDATE SQL clause to lock rows for an update operation.
+        """
+        # The nowait param depends on transaction setting
+        return 'FOR UPDATE WITH LOCK'
 
     def fulltext_search_sql(self, field_name):
         # We use varchar for TextFields so this is possible
