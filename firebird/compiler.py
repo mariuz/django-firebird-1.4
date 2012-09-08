@@ -22,11 +22,8 @@ class SQLCompiler(compiler.SQLCompiler):
 
 
 class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
-    def _get_seq_name(self, db_table):
-        return db_table.upper() + '_SQ'
-
     def _get_seq_next_value(self, db_table):
-        seq_name = self._get_seq_name(db_table)
+        seq_name = self.connection.ops.get_generator_name(db_table)
         if self.connection.ops.firebird_version[0] >= 2:
             seq_txt = 'NEXT VALUE FOR %s' % seq_name
         else:
