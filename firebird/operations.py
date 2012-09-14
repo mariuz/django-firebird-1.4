@@ -139,6 +139,9 @@ class DatabaseOperations(BaseDatabaseOperations):
     def savepoint_create_sql(self, sid):
         return "SAVEPOINT " + self.quote_name(sid)
 
+    def savepoint_commint_sql(self, sid):
+        return "RELEASE SAVEPOINT " + self.quote_name(sid)
+
     def savepoint_rollback_sql(self, sid):
         return "ROLLBACK TO " + self.quote_name(sid)
 
