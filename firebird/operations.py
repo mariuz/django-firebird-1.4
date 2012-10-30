@@ -1,4 +1,8 @@
+from datetime import datetime
+
+from django.conf import settings
 from django.db.backends import BaseDatabaseOperations, util
+from django.utils import timezone
 
 class DatabaseOperations(BaseDatabaseOperations):
     compiler_module = "firebird.compiler"
@@ -88,23 +92,29 @@ class DatabaseOperations(BaseDatabaseOperations):
         cursor.execute('SELECT GEN_ID(%s, 0) FROM rdb$database' % get_autoinc_sequence_name(self, table))
         return cursor.fetchone()[0]
 
+    def max_in_list_size(self):
+        """
+        Returns the maximum number of items that can be passed in a single 'IN'
+        list condition, or None if the backend does not impose a limit.
+        Django break up the params list into an OR of manageable chunks.
+        """
+        return 1500
+
     def max_name_length(self):
         return 31
 
     def convert_values(self, value, field):
-        value = super(DatabaseOperations, self).convert_values(value, field)
         if value is not None and field and field.get_internal_type() == 'DecimalField':
             value = util.typecast_decimal(field.format_number(value))
+        elif value in (1, 0) and field and field.get_internal_type() in ('BooleanField', 'NullBooleanField'):
+            value = bool(value)
+        # Force floats to the correct type
+        elif value is not None and field and field.get_internal_type() == 'FloatField':
+            value = float(value)
+        elif value is not None and field and (field.get_internal_type().endswith('IntegerField')
+                                              or field.get_internal_type() == 'AutoField'):
+            return int(value)
         return value
-
-    def ___value_to_db_datetime(self, value):
-        value = super(DatabaseOperations, self).value_to_db_datetime(value)
-        if isinstance(value, basestring):
-            #Replaces 6 digits microseconds to 4 digits allowed in Firebird
-            value = value[:24]
-        #return value
-        print value
-        return typeconv_dt.timestamp_conv_in(value)
 
     def year_lookup_bounds(self, value):
         first = '%s-01-01 00:00:00'
@@ -220,6 +230,39 @@ class DatabaseOperations(BaseDatabaseOperations):
 
     def get_generator_name(self, table_name):
         return get_autoinc_sequence_name(self, table_name)
+
+    def value_to_db_datetime(self, value):
+        """
+        Transform a datetime value to an object compatible with what is expected
+        by the backend driver for datetime columns.
+        """
+        if value is None:
+            return None
+
+        # Firebird doesn't support tz-aware datetimes
+        if timezone.is_aware(value):
+            if settings.USE_TZ:
+                value = value.astimezone(timezone.utc).replace(tzinfo=None)
+            else:
+                raise ValueError("Firebird backend does not support timezone-aware datetimes when USE_TZ is False.")
+
+        if isinstance(value, datetime):
+            value = str(value)
+        if isinstance(value, basestring):
+            #Replaces 6 digits microseconds to 4 digits allowed in Firebird
+            value = value[:24]
+        return unicode(value)
+
+    def value_to_db_time(self, value):
+        if value is None:
+            return None
+
+        # Firebird doesn't support tz-aware times
+        if timezone.is_aware(value):
+            raise ValueError("Firebird backend does not support timezone-aware times.")
+
+        return unicode(value)
+
 
 def get_autoinc_sequence_name(ops, table):
     return ops.quote_name('%s_SQ' % util.truncate_name(table, ops.max_name_length() - 3))

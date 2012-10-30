@@ -45,6 +45,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     allows_group_by_pk = True
     supports_forward_references = False
     has_bulk_insert = False
+    supports_timezones = False
 
     def _supports_transactions(self):
         "Confirm support for transactions"
