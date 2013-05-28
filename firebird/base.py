@@ -41,28 +41,19 @@ OperationalError = Database.OperationalError
 
 class DatabaseFeatures(BaseDatabaseFeatures):
     can_return_id_from_insert = False
-    uses_savepoints = False
+    uses_savepoints = True
     allows_group_by_pk = True
     supports_forward_references = False
     has_bulk_insert = False
+    has_select_for_update = True
     supports_timezones = False
+    suports_long_model_names = False
 
     def _supports_transactions(self):
         "Confirm support for transactions"
-        cursor = self.connection.cursor()
-        cursor.execute('CREATE TABLE ROLLBACK_TEST (X INT)')
-        self.connection._commit()
-
-        cursor.execute('INSERT INTO ROLLBACK_TEST (X) VALUES (8)')
-        self.connection._rollback()
-
-        cursor.execute('SELECT COUNT(X) FROM ROLLBACK_TEST')
-        count, = cursor.fetchone()
-
-        cursor.execute('DROP TABLE ROLLBACK_TEST')
-        #self.connection._commit()
-
-        return count == 0
+        # Firebird always supports transactions, so isn't need to check
+        # that with running any sql operations
+        return True
 
 class DatabaseValidation(BaseDatabaseValidation):
     pass
