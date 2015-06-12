@@ -2,7 +2,7 @@
 
 This is a firebird backend implementation for django that enables Firebird (version 1.5 and later) RDBMS support.
 
-**The current trunk version just works with Django 1.4**
+**The current master version just works with Django 1.4.x**
 
 
 ## django 1.5+ support ##
@@ -38,17 +38,15 @@ https://bitbucket.org/andrewgodwin/south
 
 
 
-
-
 ## Installation ##
 
 Prerequisites
   1. KInterbasDB package (http://www.firebirdsql.org/en/python-driver/)
-  1. Get django 1.4 (http://www.djangoproject.com/download/)
+  1. Get django 1.4.x (http://www.djangoproject.com/download/)
 
   * Or install using pip:
 
-> ` pip install django==1.4 `
+> ` pip install django==1.4.x `
 
 Go ahead...
 Check out the latest development version anonymously with:
