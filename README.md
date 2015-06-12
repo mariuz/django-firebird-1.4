@@ -38,15 +38,6 @@ https://bitbucket.org/andrewgodwin/south
 
 
 
-## Roadmap ##
-  * Evaluate repleacement of kinterbasdb by fdb (http://pypi.python.org/pypi/fdb/)
-
-
-  * Evaluate repleacement of kinterbasdb by pyfirebirdsql (https://github.com/nakagami/pyfirebirdsql)
-
-
-
----
 
 
 ## Installation ##
