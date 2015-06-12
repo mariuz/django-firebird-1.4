@@ -4,7 +4,7 @@
 This is a firebird backend implementation for django that enables
 Firebird (version 1.5 and later) RDBMS support.
 
-**The current master version just works with Django 1.4**
+**The current master version just works with Django 1.4.x**
 
 Django 1.5+ support
 ----------------------------------------------------------
@@ -25,7 +25,6 @@ For previous django version look at tagged repository versions:
 
 Tested against Firebird 1.5.6, 2.1.x and 2.5.x
 
-*This is alpha software - use it at your own risk.*
 
 Migrations
 ----------------------------------------
