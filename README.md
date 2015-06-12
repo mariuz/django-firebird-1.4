@@ -27,7 +27,7 @@ Tested against Firebird 1.5.6, 2.1.x and 2.5.x
 
 *This is alpha software - use it at your own risk.*
 
-<a name="Migrations"></a>Migrations[][2]
+Migrations
 ----------------------------------------
 
 We have a first approach to support migrations using south. Check it out
@@ -36,20 +36,8 @@ at <https://bitbucket.org/maxirobaina/south>
 **Update 2012-03-13:** south with firebird support is now part of
 original project. <https://bitbucket.org/andrewgodwin/south>
 
-<a name="Roadmap"></a>Roadmap[][3]
-----------------------------------
 
--   Evaluate repleacement of kinterbasdb by fdb
-    (<http://pypi.python.org/pypi/fdb/>)
-
-<!-- -->
-
--   Evaluate repleacement of kinterbasdb by pyfirebirdsql
-    (<https://github.com/nakagami/pyfirebirdsql>)
-
-------------------------------------------------------------------------
-
-<a name="Installation"></a>Installation[][4]
+Installation
 --------------------------------------------
 
 Prerequisites
@@ -63,5 +51,4 @@ Prerequisites
 
 Go ahead… Check out the latest development version anonymously with:
 
-> <tt>\$ svn checkout http://django-firebird.googlecode.com/svn/trunk/
-> django-fi
+> \$ svn checkout http://django-firebird.googlecode.com/svn/trunk/django-firebird
