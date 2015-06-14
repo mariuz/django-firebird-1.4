@@ -25,10 +25,7 @@ http://code.google.com/p/django-firebird/source/browse/#svn%2Ftags%2Fdjango-fire
 http://code.google.com/p/django-firebird/source/browse/#svn%2Ftags%2Fdjango-firebird-1.3
 
 
-Tested against Firebird 1.5.6, 2.1.x and 2.5.x
-
-_This is alpha software - use it at your own risk._
-
+Tested against Firebird 1.5.x, 2.1.x and 2.5.x
 
 ## Migrations ##
 We have a first approach to support migrations using south. Check it out at https://bitbucket.org/maxirobaina/south
