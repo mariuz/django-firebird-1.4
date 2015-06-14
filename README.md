@@ -19,10 +19,10 @@ https://github.com/maxirobaina/django-firebird
 For previous django version look at tagged repository versions:
 
 **django 1.2:**
-http://code.google.com/p/django-firebird/source/browse/#svn%2Ftags%2Fdjango-firebird-1.2
+https://github.com/mariuz/django-firebird-1.4/tree/django-firebird-1.2
 
 **django 1.3:**
-http://code.google.com/p/django-firebird/source/browse/#svn%2Ftags%2Fdjango-firebird-1.3
+https://github.com/mariuz/django-firebird-1.4/tree/django-firebird-1.3
 
 
 Tested against Firebird 1.5.x, 2.1.x and 2.5.x
