@@ -1,13 +1,13 @@
 # django-firebird #
 
-This is a firebird backend implementation for django that enables Firebird (version 1.5 and later) RDBMS support.
+This is a firebird backend implementation for django that enables Firebird (version 1.4) RDBMS support.
 
 **The current master version just works with Django 1.4.x**
 
 
 ## django 1.5+ support ##
 
-**If you need support for django 1.5 then you must go to**
+**If you need support for django >1.5.x then you must go to**
 
 https://github.com/maxirobaina/django-firebird
 
